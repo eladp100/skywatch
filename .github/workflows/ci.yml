@@ -42,3 +42,17 @@ jobs:
 
       - name: Check worker Python syntax
         run: python -m py_compile app/worker/worker.py
+  
+  build-docker:
+    runs-on: ubuntu-latest
+    needs: [test-frontend, test-worker]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build frontend Docker image
+        run: docker build -t skywatch-frontend:ci ./app/frontend
+
+      - name: Build worker Docker image
+        run: docker build -t skywatch-worker:ci ./app/worker
