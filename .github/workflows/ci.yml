@@ -1,5 +1,9 @@
 name: SkyWatch CI
 
+permissions:
+  contents: read
+  packages: write
+
 on:
   push:
     branches: [main]
@@ -42,7 +46,7 @@ jobs:
 
       - name: Check worker Python syntax
         run: python -m py_compile app/worker/worker.py
-  
+
   build-docker:
     runs-on: ubuntu-latest
     needs: [test-frontend, test-worker]
@@ -51,8 +55,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build frontend Docker image
-        run: docker build -t skywatch-frontend:ci ./app/frontend
+        run: docker build -t ghcr.io/eladp100/skywatch-frontend:latest ./app/frontend
 
       - name: Build worker Docker image
-        run: docker build -t skywatch-worker:ci ./app/worker
+        run: docker build -t ghcr.io/eladp100/skywatch-worker:latest ./app/worker
+
+      - name: Push frontend Docker image to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker push ghcr.io/eladp100/skywatch-frontend:latest
+
+      - name: Push worker Docker image to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker push ghcr.io/eladp100/skywatch-worker:latest
