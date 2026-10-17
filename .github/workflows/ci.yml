@@ -64,15 +64,27 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build frontend Docker image
-        run: docker build -t ghcr.io/eladp100/skywatch-frontend:latest ./app/frontend
+        run: |
+          docker build \
+            -t ghcr.io/eladp100/skywatch-frontend:latest \
+            -t ghcr.io/eladp100/skywatch-frontend:${{ github.sha }} \
+            ./app/frontend
 
       - name: Build worker Docker image
-        run: docker build -t ghcr.io/eladp100/skywatch-worker:latest ./app/worker
+        run: |
+          docker build \
+            -t ghcr.io/eladp100/skywatch-worker:latest \
+            -t ghcr.io/eladp100/skywatch-worker:${{ github.sha }} \
+            ./app/worker
 
-      - name: Push frontend Docker image to GHCR
+      - name: Push frontend Docker images to GHCR
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: docker push ghcr.io/eladp100/skywatch-frontend:latest
+        run: |
+          docker push ghcr.io/eladp100/skywatch-frontend:latest
+          docker push ghcr.io/eladp100/skywatch-frontend:${{ github.sha }}
 
-      - name: Push worker Docker image to GHCR
+      - name: Push worker Docker images to GHCR
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: docker push ghcr.io/eladp100/skywatch-worker:latest
+        run: |
+          docker push ghcr.io/eladp100/skywatch-worker:latest
+          docker push ghcr.io/eladp100/skywatch-worker:${{ github.sha }}
