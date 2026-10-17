@@ -27,4 +27,18 @@ jobs:
       - name: Run frontend tests
         run: |
           python -m pytest app/frontend/test_app.py -v
-          
+
+  test-worker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Check worker Python syntax
+        run: python -m py_compile app/worker/worker.py
