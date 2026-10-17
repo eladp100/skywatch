@@ -10,3 +10,12 @@ def test_unsupported_city():
     assert response.get_json() == {
         "error": "City not supported yet"
     }
+
+
+def test_home():
+    client = app.test_client()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.get_data(as_text=True) == "Hello from SkyWatch!"
