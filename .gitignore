@@ -18,3 +18,12 @@ __pycache__/
 
 # Pytest cache
 .pytest_cache/
+
+# Terraform local files
+**/.terraform/
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/tfplan
+**/*.tfplan
+**/crash.log
+**/crash.*.log
