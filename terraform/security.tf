@@ -3,7 +3,9 @@ resource "aws_security_group" "skywatch" {
   description = "Security group for SkyWatch K3s servers"
   vpc_id      = var.vpc_id
 
-  egress = []
+  lifecycle {
+    ignore_changes = [egress]
+  }
 
   tags = {
     Name = "skywatch-security-group"
