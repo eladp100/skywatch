@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skywatch-frontend
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      app: skywatch-frontend
+  template:
+    metadata:
+      labels:
+        app: skywatch-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: {{ .Values.frontend.image | quote }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: {{ .Values.frontend.port }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.frontend.port }}
+          resources:
+{{ toYaml .Values.frontend.resources | indent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: skywatch-frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: skywatch-frontend
+  ports:
+    - port: {{ .Values.frontend.port }}
+      targetPort: {{ .Values.frontend.port }}

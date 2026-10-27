@@ -1,0 +1,29 @@
+frontend:
+  replicaCount: 1
+  image: ghcr.io/eladp100/skywatch-frontend:latest
+  port: 5000
+  resources:
+    requests:
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+worker:
+  replicaCount: 1
+  image: ghcr.io/eladp100/skywatch-worker:latest
+  resources:
+    requests:
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+rabbitmq:
+  replicaCount: 1
+  image: rabbitmq:4-management-alpine
+  resources:
+    requests:
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+existingSecret: rabbitmq-credentials
