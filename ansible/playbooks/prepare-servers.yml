@@ -1,0 +1,27 @@
+---
+- name: Prepare SkyWatch Ubuntu servers
+  hosts: k3s_cluster
+  serial: 1
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Ensure basic utilities are installed
+      ansible.builtin.apt:
+        name:
+          - curl
+          - git
+          - jq
+          - unzip
+          - ca-certificates
+        state: present
+        update_cache: false
+
+    - name: Verify required utilities
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - "curl --version"
+        - "git --version"
+        - "jq --version"
+        - "unzip -v"
+      changed_when: false
