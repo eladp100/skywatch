@@ -4,8 +4,10 @@ frontend:
   port: 5000
   resources:
     requests:
+      cpu: 25m
       memory: 64Mi
     limits:
+      cpu: 200m
       memory: 128Mi
 
 worker:
@@ -13,8 +15,10 @@ worker:
   image: ghcr.io/eladp100/skywatch-worker:latest
   resources:
     requests:
+      cpu: 25m
       memory: 64Mi
     limits:
+      cpu: 200m
       memory: 128Mi
 
 rabbitmq:

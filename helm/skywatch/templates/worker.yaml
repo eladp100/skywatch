@@ -17,6 +17,8 @@ spec:
           image: {{ .Values.worker.image | quote }}
           imagePullPolicy: Always
           env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
             - name: RABBITMQ_HOST
               value: rabbitmq
             - name: RABBITMQ_USER
@@ -29,7 +31,5 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.existingSecret }}
                   key: password
-            - name: PYTHONUNBUFFERED
-              value: "1"
           resources:
 {{ toYaml .Values.worker.resources | indent 12 }}
