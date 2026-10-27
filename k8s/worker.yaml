@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skywatch-worker
+  namespace: skywatch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: skywatch-worker
+  template:
+    metadata:
+      labels:
+        app: skywatch-worker
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/eladp100/skywatch-worker:latest
+          imagePullPolicy: Always
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: RABBITMQ_HOST
+              value: rabbitmq
+            - name: RABBITMQ_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: username
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: password
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

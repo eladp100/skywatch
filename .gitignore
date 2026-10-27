@@ -27,3 +27,4 @@ __pycache__/
 **/*.tfplan
 **/crash.log
 **/crash.*.log
+k8s/rabbitmq-secret.yaml
