@@ -1,0 +1,20 @@
+---
+- name: Verify SkyWatch K3s cluster
+  hosts: k3s_cluster
+  gather_facts: false
+
+  tasks:
+    - name: Check current user
+      ansible.builtin.command: whoami
+      register: current_user
+      changed_when: false
+
+    - name: Check K3s service
+      ansible.builtin.command: systemctl is-active {{ 'k3s' if inventory_hostname in groups['k3s_server'] else 'k3s-agent' }}
+      become: true
+      register: k3s_status
+      changed_when: false
+
+    - name: Display server status
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} | user={{ current_user.stdout }} | k3s={{ k3s_status.stdout }}"
