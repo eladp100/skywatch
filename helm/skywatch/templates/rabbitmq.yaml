@@ -32,6 +32,8 @@ spec:
           readinessProbe:
             tcpSocket:
               port: 5672
+            initialDelaySeconds: 10
+            periodSeconds: 10
           resources:
 {{ toYaml .Values.rabbitmq.resources | indent 12 }}
 ---
