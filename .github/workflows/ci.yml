@@ -1,90 +1,241 @@
-name: SkyWatch CI
-
-permissions:
-  contents: read
-  packages: write
+name: SkyWatch CI/CD
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skywatch-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  test-frontend:
+  ci:
+    name: Python, Terraform and Helm
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
+          cache: pip
+          cache-dependency-path: app/frontend/requirements.txt
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r app/frontend/requirements.txt
+          pip install -r app/worker/requirements.txt
 
-      - name: Run frontend tests
+      - name: Python tests
         run: |
           python -m pytest app/frontend/test_app.py -v
+          python -m py_compile app/frontend/app.py app/worker/worker.py
 
-  test-worker:
-    runs-on: ubuntu-latest
+      - uses: hashicorp/setup-terraform@v3
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Terraform formatting
+        run: terraform -chdir=terraform fmt -check -recursive
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Terraform initialization
+        run: terraform -chdir=terraform init -backend=false -input=false
+
+      - name: Terraform validation
+        run: terraform -chdir=terraform validate -no-color
+
+      - uses: azure/setup-helm@v4
         with:
-          python-version: '3.14'
+          version: v3.22.1
 
-      - name: Check worker Python syntax
-        run: python -m py_compile app/worker/worker.py
+      - name: Helm lint and render
+        run: |
+          helm lint helm/skywatch
+          helm template skywatch helm/skywatch \
+            --namespace skywatch > /tmp/skywatch-rendered.yaml
+          grep -q 'ip-172-31-34-253' /tmp/skywatch-rendered.yaml
+          grep -q 'ip-172-31-4-251' /tmp/skywatch-rendered.yaml
 
-  build-docker:
+  docker:
+    name: Build and publish Docker images
+    needs: ci
     runs-on: ubuntu-latest
-    needs: [test-frontend, test-worker]
+
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Log in to GHCR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build frontend Docker image
-        run: |
-          docker build \
-            -t ghcr.io/eladp100/skywatch-frontend:latest \
-            -t ghcr.io/eladp100/skywatch-frontend:${{ github.sha }} \
-            ./app/frontend
+      - name: Build and publish frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app/frontend
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ghcr.io/eladp100/skywatch-frontend:${{ github.sha }}
 
-      - name: Build worker Docker image
-        run: |
-          docker build \
-            -t ghcr.io/eladp100/skywatch-worker:latest \
-            -t ghcr.io/eladp100/skywatch-worker:${{ github.sha }} \
-            ./app/worker
+      - name: Build and publish worker
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app/worker
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ghcr.io/eladp100/skywatch-worker:${{ github.sha }}
 
-      - name: Push frontend Docker images to GHCR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          docker push ghcr.io/eladp100/skywatch-frontend:latest
-          docker push ghcr.io/eladp100/skywatch-frontend:${{ github.sha }}
+  deploy:
+    name: Deploy to K3s
+    needs: docker
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main' &&
+      vars.SKYWATCH_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production
 
-      - name: Push worker Docker images to GHCR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.22.1
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.SKYWATCH_AWS_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Reject outdated deployment
         run: |
-          docker push ghcr.io/eladp100/skywatch-worker:latest
-          docker push ghcr.io/eladp100/skywatch-worker:${{ github.sha }}
+          set -euo pipefail
+          LATEST=$(git ls-remote origin refs/heads/main | cut -f1)
+          test "$LATEST" = "$GITHUB_SHA" || {
+            echo "Newer main commit exists; refusing outdated deployment."
+            exit 1
+          }
+
+      - name: Package and upload Helm chart
+        run: |
+          helm package helm/skywatch --destination /tmp
+          aws s3 cp /tmp/skywatch-0.1.0.tgz \
+            "s3://${{ vars.SKYWATCH_DEPLOY_BUCKET }}/releases/${{ github.sha }}/skywatch-0.1.0.tgz"
+
+      - name: Deploy and verify using SSM
+        env:
+          SHA: ${{ github.sha }}
+          BUCKET: ${{ vars.SKYWATCH_DEPLOY_BUCKET }}
+          INSTANCE: i-0e7d53c2f50742a40
+        run: |
+          set -euo pipefail
+
+          cp scripts/deploy-k3s.sh /tmp/skywatch-remote.sh
+
+          export CHART_URI="s3://${BUCKET}/releases/${SHA}/skywatch-0.1.0.tgz"
+          export FRONTEND_IMAGE="ghcr.io/eladp100/skywatch-frontend:${SHA}"
+          export WORKER_IMAGE="ghcr.io/eladp100/skywatch-worker:${SHA}"
+
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+
+          script = pathlib.Path("/tmp/skywatch-remote.sh").read_text()
+          variables = {
+              "CHART_URI": os.environ["CHART_URI"],
+              "FRONTEND_IMAGE": os.environ["FRONTEND_IMAGE"],
+              "WORKER_IMAGE": os.environ["WORKER_IMAGE"],
+          }
+
+          import shlex
+          prefix = "\n".join(
+              f"export {key}={shlex.quote(value)}"
+              for key, value in variables.items()
+          )
+
+          import base64
+
+          encoded = base64.b64encode(
+              (prefix + "\n" + script).encode()
+          ).decode()
+
+          payload = {
+              "commands": [
+                  "echo " + shlex.quote(encoded) +
+                  " | base64 -d > /tmp/skywatch-deploy.sh",
+                  "bash /tmp/skywatch-deploy.sh"
+              ],
+              "executionTimeout": ["900"]
+          }
+
+          pathlib.Path("/tmp/skywatch-ssm.json").write_text(
+              json.dumps(payload)
+          )
+          PY
+
+          # Recheck immediately before sending the deployment command.
+          LATEST=$(git ls-remote origin refs/heads/main | cut -f1)
+          test "$LATEST" = "$GITHUB_SHA" || {
+            echo "Newer main commit exists; refusing outdated deployment."
+            exit 1
+          }
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE" \
+            --document-name AWS-RunShellScript \
+            --parameters file:///tmp/skywatch-ssm.json \
+            --query 'Command.CommandId' \
+            --output text)
+
+          echo "SSM Command ID: $COMMAND_ID"
+
+          STATUS="Pending"
+
+          for i in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE" \
+              --query Status \
+              --output text 2>/dev/null || echo Pending)
+
+            case "$STATUS" in
+              Success|Failed|Cancelled|TimedOut|Cancelling)
+                break
+                ;;
+            esac
+
+            sleep 10
+          done
+
+          if [ "$STATUS" = "Success" ]; then
+            aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE" \
+              --query '{Status:Status,Output:StandardOutputContent}' \
+              --output json
+          else
+            aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE" \
+              --query '{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}' \
+              --output json
+            exit 1
+          fi
