@@ -28,3 +28,10 @@ __pycache__/
 **/crash.log
 **/crash.*.log
 k8s/rabbitmq-secret.yaml
+
+# Local and sensitive files
+ansible/inventory/
+*.bak
+*.swp
+*.tmp
+.terraform/

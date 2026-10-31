@@ -12,6 +12,8 @@ spec:
       labels:
         app: skywatch-worker
     spec:
+      nodeSelector:
+{{ toYaml .Values.worker.nodeSelector | indent 8 }}
       containers:
         - name: worker
           image: {{ .Values.worker.image | quote }}

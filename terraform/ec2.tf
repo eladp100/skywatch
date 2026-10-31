@@ -2,7 +2,7 @@ resource "aws_instance" "skywatch" {
   for_each = local.servers
 
   ami                    = data.aws_ssm_parameter.ubuntu_ami.value
-  instance_type          = var.instance_type
+  instance_type          = each.value.instance_type
   subnet_id              = each.value.subnet_id
   vpc_security_group_ids = [aws_security_group.skywatch.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_ssm.name
@@ -11,6 +11,12 @@ resource "aws_instance" "skywatch" {
 
   credit_specification {
     cpu_credits = var.cpu_credits
+  }
+
+  lifecycle {
+    ignore_changes = [
+      credit_specification
+    ]
   }
 
   root_block_device {

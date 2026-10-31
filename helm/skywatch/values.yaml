@@ -2,6 +2,8 @@ frontend:
   replicaCount: 1
   image: ghcr.io/eladp100/skywatch-frontend:latest
   port: 5000
+  nodeSelector:
+    kubernetes.io/hostname: ip-172-31-34-253
   resources:
     requests:
       cpu: 25m
@@ -13,6 +15,8 @@ frontend:
 worker:
   replicaCount: 1
   image: ghcr.io/eladp100/skywatch-worker:latest
+  nodeSelector:
+    kubernetes.io/hostname: ip-172-31-4-251
   resources:
     requests:
       cpu: 25m

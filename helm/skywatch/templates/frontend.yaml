@@ -12,6 +12,8 @@ spec:
       labels:
         app: skywatch-frontend
     spec:
+      nodeSelector:
+{{ toYaml .Values.frontend.nodeSelector | indent 8 }}
       containers:
         - name: frontend
           image: {{ .Values.frontend.image | quote }}

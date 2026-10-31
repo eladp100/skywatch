@@ -18,7 +18,7 @@ variable "subnet_ids" {
 variable "instance_type" {
   description = "EC2 instance type for SkyWatch servers"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.small"
 }
 
 variable "cpu_credits" {
@@ -74,4 +74,10 @@ variable "server_names" {
     condition     = length(var.server_names) == 3 && length(distinct(var.server_names)) == 3
     error_message = "SkyWatch requires exactly three unique server names."
   }
+}
+
+variable "worker_instance_type" {
+  description = "EC2 instance type for SkyWatch worker nodes"
+  type        = string
+  default     = "t3.small"
 }
