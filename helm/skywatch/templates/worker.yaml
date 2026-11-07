@@ -16,6 +16,11 @@ spec:
 {{ toYaml .Values.worker.nodeSelector | indent 8 }}
       containers:
         - name: worker
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           image: {{ .Values.worker.image | quote }}
           imagePullPolicy: Always
           env:

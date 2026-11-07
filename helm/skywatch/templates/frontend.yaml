@@ -16,11 +16,23 @@ spec:
 {{ toYaml .Values.frontend.nodeSelector | indent 8 }}
       containers:
         - name: frontend
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           image: {{ .Values.frontend.image | quote }}
           imagePullPolicy: Always
           ports:
             - containerPort: {{ .Values.frontend.port }}
           readinessProbe:
+            httpGet:
+              path: /
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /
