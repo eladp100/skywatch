@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy to K3s'
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -102,9 +108,13 @@ jobs:
     name: Deploy to K3s
     needs: docker
     if: >-
-      github.event_name != 'pull_request' &&
       github.ref == 'refs/heads/main' &&
-      vars.SKYWATCH_DEPLOY_ENABLED == 'true'
+      (
+        (github.event_name == 'push' &&
+         vars.SKYWATCH_DEPLOY_ENABLED == 'true') ||
+        (github.event_name == 'workflow_dispatch' &&
+         inputs.deploy == true)
+      )
     runs-on: ubuntu-latest
     environment: production
 
