@@ -1,0 +1,51 @@
+name: SkyWatch OIDC Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Inspect OIDC claims safely
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import urllib.request
+
+          request_url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]
+          request_token = os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]
+
+          separator = "&" if "?" in request_url else "?"
+          url = request_url + separator + "audience=sts.amazonaws.com"
+
+          request = urllib.request.Request(
+              url,
+              headers={"Authorization": f"Bearer {request_token}"}
+          )
+
+          with urllib.request.urlopen(request, timeout=15) as response:
+              token = json.load(response)["value"]
+
+          payload = token.split(".")[1]
+          payload += "=" * (-len(payload) % 4)
+
+          claims = json.loads(
+              base64.urlsafe_b64decode(payload)
+          )
+
+          print("OIDC issuer:", claims.get("iss"))
+          print("OIDC audience:", claims.get("aud"))
+          print("OIDC subject:", claims.get("sub"))
+          PY
