@@ -12,8 +12,15 @@ spec:
       labels:
         app: rabbitmq
     spec:
+      volumes:
+        - name: rabbitmq-data
+          persistentVolumeClaim:
+            claimName: rabbitmq-data
       containers:
         - name: rabbitmq
+          volumeMounts:
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq
           image: {{ .Values.rabbitmq.image | quote }}
           ports:
             - containerPort: 5672
